@@ -9,7 +9,7 @@ public class Hello {
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
 
         server.createContext("/", exchange -> {
-            String response = "Docker image build activity - manual";
+            String response = "Docker image build activity - automated";
             exchange.sendResponseHeaders(200, response.length());
             OutputStream os = exchange.getResponseBody();
             os.write(response.getBytes());
