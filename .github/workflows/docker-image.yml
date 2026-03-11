@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - master
-    paths:
-      - Hello.java
 
 jobs:
   docker:
