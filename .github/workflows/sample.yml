@@ -10,7 +10,12 @@ jobs:
     name: Stage 1 - Build with JSON
     runs-on: ubuntu-latest
     outputs:
-      image_mapping: ${{ steps.build.outputs.image_mapping }}
+      artifact: ${{ steps.build.outputs.artifact }}
+      version: ${{ steps.build.outputs.version }}
+      timestamp: ${{ steps.build.outputs.timestamp }}
+      build: ${{ steps.build.outputs.build }}
+      commit: ${{ steps.build.outputs.commit }}
+      # Don't pass secrets through outputs - they get masked!
     
     steps:
       - name: Build application
@@ -21,13 +26,6 @@ jobs:
           ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
           ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
         run: |
-          # Debug: Check if secrets are available
-          echo "Checking secrets..."
-          if [ -z "$MY_SECRET" ]; then
-            echo "WARNING: MY_SECRET is empty"
-            MY_SECRET="default-secret"
-          fi
-          
           # Create variables
           ARTIFACT_NAME="myapp.zip"
           VERSION="1.0.0"
@@ -35,26 +33,12 @@ jobs:
           BUILD_NUMBER="${{ github.run_number }}"
           COMMIT_SHA="${{ github.sha }}"
           
-          # Create JSON output with heredoc (secrets will be in output - be careful!)
-          cat >> $GITHUB_OUTPUT << 'HEREDOC_EOF'
-          image_mapping<<JSON_EOF
-          {
-            "artifact": "myapp.zip",
-            "version": "1.0.0",
-            "timestamp": "2024-01-01T00:00:00Z",
-            "build": "123",
-            "commit": "abc1234",
-            "acr_username": "ACR_USER_PLACEHOLDER",
-            "acr_password": "ACR_PASS_PLACEHOLDER",
-            "acr_registry": "ACR_REG_PLACEHOLDER"
-          }
-          JSON_EOF
-          HEREDOC_EOF
-          
-          # Now replace placeholders with actual values
-          sed -i "s|ACR_USER_PLACEHOLDER|$ACR_USERNAME|g" $GITHUB_OUTPUT
-          sed -i "s|ACR_PASS_PLACEHOLDER|$ACR_PASSWORD|g" $GITHUB_OUTPUT
-          sed -i "s|ACR_REG_PLACEHOLDER|$ACR_REGISTRY|g" $GITHUB_OUTPUT
+          # Pass non-secret values as separate outputs
+          echo "artifact=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "build=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "commit=${COMMIT_SHA:0:7}" >> $GITHUB_OUTPUT
           
           echo "Output created successfully"
 
@@ -64,9 +48,38 @@ jobs:
     needs: stage1-build
     
     steps:
-      - name: Print and use JSON outputs from Stage 1
+      - name: Use values from Stage 1 and secrets
+        env:
+          # Pass secrets directly to this job
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
         run: |
           echo "=== Received from Stage 1 ==="
-          echo "Raw JSON: ${{ needs.stage1-build.outputs.image_mapping }}"
+          echo "Artifact: ${{ needs.stage1-build.outputs.artifact }}"
+          echo "Version: ${{ needs.stage1-build.outputs.version }}"
+          echo "Timestamp: ${{ needs.stage1-build.outputs.timestamp }}"
+          echo "Build: ${{ needs.stage1-build.outputs.build }}"
+          echo "Commit: ${{ needs.stage1-build.outputs.commit }}"
           echo ""
+          echo "=== Using ACR Credentials (passed directly via env) ==="
+          echo "ACR Registry: $ACR_REGISTRY"
+          echo "ACR Username: $ACR_USERNAME"
+          echo "ACR Password length: ${#ACR_PASSWORD}"
           
+          # Now construct JSON in this job if needed
+          JSON_OUTPUT=$(cat <<EOF
+          {
+            "artifact": "${{ needs.stage1-build.outputs.artifact }}",
+            "version": "${{ needs.stage1-build.outputs.version }}",
+            "timestamp": "${{ needs.stage1-build.outputs.timestamp }}",
+            "build": "${{ needs.stage1-build.outputs.build }}",
+            "commit": "${{ needs.stage1-build.outputs.commit }}",
+            "acr_username": "$ACR_USERNAME",
+            "acr_password": "$ACR_PASSWORD",
+            "acr_registry": "$ACR_REGISTRY"
+          }
+          EOF
+          )
+          
+          echo "Complete JSON with secrets: $JSON_OUTPUT"
