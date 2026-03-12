@@ -22,7 +22,7 @@ jobs:
           echo "image_mapping=$image_mapping" >> $GITHUB_OUTPUT
 
       - name: print JSON output
-        run: echo '${{ steps.build.outputs.image_mapping }}''
+        run: echo '${{ steps.build.outputs.image_mapping }}'
           
   stage2-test:
     name: Stage 2 - Test and Print JSON
